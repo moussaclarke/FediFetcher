@@ -25,7 +25,7 @@ For detailed information on the how and why, please read the [FediFetcher for Ma
 
 FediFetcher makes use of the Mastodon API. It'll run against any instance implementing this API, and whilst it was built for Mastodon, it's been [confirmed working against Pleroma](https://fed.xnor.in/objects/6bd47928-704a-4cb8-82d6-87471d1b632f) as well.
 
-FediFetcher will pull in posts and profiles from any server that implements the Mastodon API, including Mastodon, Pleroma, Akkoma, Pixelfed, Lemmy, and probably others.
+FediFetcher will pull in posts and profiles from any servers running the following software: Mastodon, Pleroma, Akkoma, Pixelfed, Hometown, Misskey, Firefish (Calckey), Foundkey, and Lemmy.
 
 ## Setup
 
@@ -61,10 +61,10 @@ Run FediFetcher as a GitHub Action, a cron job, or a container:
    2.  Click New Repository Secret
    3.  Supply the Name `ACCESS_TOKEN` and provide the Token generated above as Secret
 3. Create a file called `config.json` with your [configuration options](#configuration-options) in the repository root. **Do NOT include the Access Token in your `config.json`!**
-4. Finally go to the Actions tab and enable the action. The action should now automatically run approximately once every 10 min. 
+4. Finally go to the Actions tab and enable the action. The action should now automatically run approximately once every 10 min.
 
 > **Note**
-> 
+>
 > Keep in mind that [the schedule event can be delayed during periods of high loads of GitHub Actions workflow runs](https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#schedule).
 
 #### To run FediFetcher as a cron job:
@@ -73,18 +73,14 @@ Run FediFetcher as a GitHub Action, a cron job, or a container:
 2. Install requirements: `pip install -r requirements.txt`
 3. Create a `json` file with [your configuration options](#configuration-options). You may wish to store this in the `./artifacts` directory, as that directory is `.gitignore`d
 4. Then simply run this script like so: `python find_posts.py -c=./artifacts/config.json`.
- 
+
 If desired, all configuration options can be provided as command line flags, instead of through a JSON file. An [example script](./examples/FediFetcher.sh) can be found in the `examples` folder.
 
 When using a cronjob, we are using file based locking to avoid multiple overlapping executions of the script. The timeout period for the lock can be configured using `lock-hours`.
 
 > **Note**
-> 
+>
 > If you are running FediFetcher locally, my recommendation is to run it manually once, before turning on the cron job: The first run will be significantly slower than subsequent runs, and that will help you prevent overlapping during that first run.
-
-> **Note**
-> 
-> If you wish to run FediFetcher using Windows Task Scheduler, you can rename the script to the `.pyw` extension instead of `.py`, and it will run silently, without opening a console window.
 
 #### To run FediFetcher from a container:
 
@@ -94,16 +90,26 @@ FediFetcher is also available in a pre-packaged container, [FediFetcher](https:/
 2. Run the container, passing the configurations options as command line arguments: `docker run -it ghcr.io/nanos/fedifetcher:latest --access-token=<TOKEN> --server=<SERVER>`
 
 > **Note**
-> 
+>
 > The same rules for running this as a cron job apply to running the container: don't overlap any executions.
 
 Persistent files are stored in `/app/artifacts` within the container, so you may want to map this to a local folder on your system.
 
 An [example Kubernetes CronJob](./examples/k8s-cronjob.yaml) for running the container is included in the `examples` folder.
 
+An [example Docker Compose Script](./examples/docker-compose.yaml) for running the container periodically is included in the `examples` folder.
+
+#### To run FediFetcher with systemd-timer:
+
+See [systemd.md](./examples/systemd.md)
+
 ### Configuration options
 
 FediFetcher has quite a few configuration options, so here is my quick configuration advice, that should probably work for most people:
+
+> **Warning**
+>
+> **Do NOT** include your `access-token` in the `config.json` when running FediFetcher as GitHub Action. When running FediFetcher as GitHub Action **ALWAYS** [set the Access Token as an Action Secret](#to-run-fedifetcher-as-a-github-action).
 
 ```json
 {
@@ -116,10 +122,6 @@ FediFetcher has quite a few configuration options, so here is my quick configura
 ```
 
 If you configure FediFetcher this way, it'll fetch missing remote replies to the last 200 posts in your home timeline. It'll additionally backfill profiles of the last 80 people you followed, and of every account who appeared in your notifications during the past hour.
-
-> **Warning**
-> 
-> **Do NOT** include your `access-token` in the `config.json` when running FediFetcher as GitHub Action. When running FediFetcher as GitHub Action **ALWAYS** [set the Access Token as an Action Secret](#to-run-fedifetcher-as-a-github-action).
 
 #### Advanced Options
 
@@ -140,6 +142,7 @@ Option | Required? | Notes |
 |`backfill-with-context` | No | Set to `0` to disable fetching remote replies while backfilling profiles. This is enabled by default, but you can disable it, if it's too slow for you.
 |`backfill-mentioned-users` | No | Set to `0` to disable backfilling any mentioned users when fetching the home timeline. This is enabled by default, but you can disable it, if it's too slow for you.
 | `remember-users-for-hours` | No | How long between back-filling attempts for non-followed accounts? Defaults to `168`, i.e. one week.
+| `remember-hosts-for-days` | No | How long should FediFetcher cache host info for? Defaults to `30`.
 | `http-timeout` | No | The timeout for any HTTP requests to the Mastodon API in seconds. Defaults to `5`.
 | `lock-hours` | No | Determines after how many hours a lock file should be discarded. Not relevant when running the script as GitHub Action, as concurrency is prevented using a different mechanism. Recommended value: `24`.
 | `lock-file` | No | Location for the lock file. If not specified, will use `lock.lock` under the state directory. Not relevant when running the script as GitHub Action.
@@ -150,7 +153,7 @@ Option | Required? | Notes |
 
 ### Multi User support
 
-If you wish to [run FediFetcher for multiple users on your instance](https://blog.thms.uk/2023/04/muli-user-support-for-fedifetcher?utm_source=github), you can supply the `access-token` as an array, with different access tokens for different users. That will allow you to fetch replies and/or backfill profiles for multiple users on your account. 
+If you wish to [run FediFetcher for multiple users on your instance](https://blog.thms.uk/2023/04/muli-user-support-for-fedifetcher?utm_source=github), you can supply the `access-token` as an array, with different access tokens for different users. That will allow you to fetch replies and/or backfill profiles for multiple users on your account.
 
 This is only supported when running FediFetcher as cron job, or container. Multi-user support is not available when running FediFetcher as GitHub Action.
 
@@ -158,7 +161,7 @@ This is only supported when running FediFetcher as cron job, or container. Multi
 
  - For all actions, your access token must include these scopes:
    - `read:search`
-   - `read:statuses` 
+   - `read:statuses`
    - `read:accounts`
  - If you are supplying `reply-interval-in-hours` you must additionally enable this scope:
    - `admin:read:accounts`
